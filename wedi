@@ -1,0 +1,153 @@
+#!/bin/sh
+POSIXLY_CORRECT=yes
+arg="$1"
+#...........................................................
+# kdyz neexistuje soubor wedirc, tak ho vytvori
+if [ ! -f $WEDI_RC ]; then
+  if [ ! touch "$WEDI_RC" 2> /dev/null ]; then
+    echo "spatne nastavena WEDI_RC"
+  fi
+fi
+
+#............................................................
+# odstraneni zaznamu z wedirc, pokud byl soubor odstranen
+while read line
+do
+  wed=$(echo $line |  cut -f1 -d ':')
+  if [ ! -f $wed ]; then
+    echo "$wed"
+    sed -i "\+^${wed}\b+Id" $WEDI_RC
+    fi
+done < $WEDI_RC
+
+#................................................................
+# overeni realpath
+$(realpath . > /dev/null 2>&1)
+if [ $? -ne 0 ]; then
+  echo "spatny realpath" >&2
+exit 1
+fi
+
+#...........................................................
+# zapsani do wedirc pokud je to soubor
+if [ -f "$arg" ]; then
+  if [ -e "$arg" ]; then
+echo "$(realpath "${arg}"):$(date +%Y-%m-%d)" >> WEDI_RC
+sl=$arg
+else
+  echo "meex"
+  fi
+fi
+#...........................................................
+# pokud je vice argumentu
+if [ $# -gt 3 ]; then
+    echo "prilis mnoho argumentu" >&2
+    exit 1
+fi
+#...........................................................
+# spatna cesta k WEDI_RC
+if [ -z "$WEDI_RC" ]; then
+  echo "spatne zadana cesta k WEDI_RC" >&2
+  exit 1
+fi
+#...........................................................
+# pokud je argument slozka
+if [ -d "$arg" ]; then
+sl=$(grep "$arg" $WEDI_RC | tail -n 1 | cut -f1 -d ':')
+fi
+#...........................................................
+# pokud je spusteno bez argumentu
+if [ $# -eq 0 ]; then
+  sl=$(grep `pwd`/[^/]*$ $WEDI_RC | tail -n 1 | cut -f1 -d ':')
+
+fi
+#...........................................................
+# pokud je jediny argument a ten je -m
+#zobrazeni nejcasteji editovaneho souboru
+  if [ "$arg" = "-m" ]; then
+    if [ "$#" -eq 1 ]; then
+      sl=$(grep "$(realpath .)/[^/]*$" $WEDI_RC | cut -f1 -d ':' | sort | uniq -c | sort | tail -n 1 | awk '{print $2}' )
+  fi
+fi
+#...........................................................
+# pokud je jediny argument a ten je -l
+#zobrazeni vsech editovanych souboru
+if [ "$arg" = "-l" ]; then
+  if [ "$#" = "1" ]; then
+    echo $(grep "$(realpath .)/[^/]*$"  $WEDI_RC | cut -f1 -d ':' | tr "/" " " | awk '{print $NF}' | sort | uniq -c | awk '{print $NF}' )
+    sl=0
+  else
+    if [ ! -d $2 ]; then
+    echo "chyba v parametrech" >&2
+    exit 1
+  fi
+  fi
+fi
+#...........................................................
+# pokud jsou dva argumenty, prvni je -m a druhy adresar
+# zobrazeni nejcasteji editovaneho souboru z adresare zadaneho druhym argumentem
+if [ "$arg" = "-m" ]; then
+  if [ "$#" -eq 2 ]; then
+    tmp=$2
+    sl=$(grep "$tmp/[^/]*$" $WEDI_RC | cut -f1 -d ':' | sort | uniq -c | sort | tail -n 1 | awk '{print $2}' )
+  fi
+fi
+#.............................................................
+#pokud jsou dva arg, prvni je -l a druhy adresar
+#zobrazeni vsech editovanych souboru z adresare zadaneho druhym argumentem
+if [ "$arg" = "-l" ]; then
+  if [ "$#" -eq 2 ]; then
+    tmp=$2
+    echo "$(grep "$tmp/[^/]*$" $WEDI_RC | cut -f1 -d ':' | tr "/" " " | awk '{print $NF}' | sort | uniq -c | awk '{print $NF}' )"
+    sl=0
+  fi
+fi
+#................................................................
+# prepinace -a a -b
+# na eve se vyskytuji chyby
+if [ "$arg" = "-b" ]; then
+  if [ "$#" -eq 2 ]; then
+    cesta=$(realpath .)
+    dat=$2
+    echo "$(grep "$cesta/[^/]*$" "$WEDI_RC" | awk -F ':' 'datum>$2' datum="$dat")"
+    sl=0
+  fi
+if [ "$#" -eq 3 ]; then
+  dat=$2
+  cesta=$(realpath $3)
+  echo "$(grep "$cesta/[^/]*$" "$WEDI_RC" | awk -F ':' 'datum>$2' datum="$dat")"
+  sl=0
+  fi
+fi
+if [ "$arg" = "-a" ]; then
+  if [ "$#" -eq 2 ]; then
+  cesta=$(realpath .)
+  dat=$2
+  echo "$(grep "$cesta/[^/]*$" "$WEDI_RC" | awk -F ':' 'datum<$2' datum="$dat")"
+  sl=0
+fi
+  if [ "$#" -eq 3 ]; then
+    dat=$2
+    cesta=$(realpath $3)
+    echo "$(grep "$cesta/[^/]*$" "$WEDI_RC" | awk -F ':' 'datum<$2' datum="$dat")"
+    sl=0
+  fi
+fi
+
+#.............................................................
+#zdali je sl dostupny, otevre editaci souboru, jinak chyba
+#jeste dopilovat
+if [ -z "$sl" ]; then
+echo "chyba" >&2
+exit 1
+else
+if [ -z "$EDITOR" ]; then
+  if [ -z "$VISUAL" ]; then
+    vi "$sl"
+  else
+    $VISUAL "$sl"
+  fi
+else
+  $EDITOR "$sl"
+  fi
+fi
